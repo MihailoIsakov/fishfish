@@ -21,12 +21,12 @@ import time
 import numpy as np
 import theano
 import theano.tensor as T
-import cv2
 
 import lasagne
 
 import image2inputs
 
+theano.config.optimizer="None"
 
 # ################## Download and prepare the MNIST dataset ##################
 # This is just some way of getting the MNIST dataset from an online location
@@ -38,54 +38,6 @@ def load_dataset():
     tri, tro, vi, vo, tei, teo =  image2inputs.build_set(nopuff, puff)
     return tri, tro, vi, vo, tei, teo
 
-
-# def load_dataset():
-#     # We first define some helper functions for supporting both Python 2 and 3.
-#     if sys.version_info[0] == 2:
-#         from urllib import urlretrieve
-#         import cPickle as pickle
-#
-#         def pickle_load(f, encoding):
-#             return pickle.load(f)
-#     else:
-#         from urllib.request import urlretrieve
-#         import pickle
-#
-#         def pickle_load(f, encoding):
-#             return pickle.load(f, encoding=encoding)
-#
-#     # We'll now download the MNIST dataset if it is not yet available.
-#     url = 'http://deeplearning.net/data/mnist/mnist.pkl.gz'
-#     filename = 'mnist.pkl.gz'
-#     if not os.path.exists(filename):
-#         print("Downloading MNIST dataset...")
-#         urlretrieve(url, filename)
-#
-#     # We'll then load and unpickle the file.
-#     import gzip
-#     with gzip.open(filename, 'rb') as f:
-#         data = pickle_load(f, encoding='latin-1')
-#
-#     # The MNIST dataset we have here consists of six numpy arrays:
-#     # Inputs and targets for the training set, validation set and test set.
-#     X_train, y_train = data[0]
-#     X_val, y_val = data[1]
-#     X_test, y_test = data[2]
-#
-#     # The inputs come as vectors, we reshape them to monochrome 2D images,
-#     # according to the shape convention: (examples, channels, rows, columns)
-#     X_train = X_train.reshape((-1, 1, 28, 28))
-#     X_val = X_val.reshape((-1, 1, 28, 28))
-#     X_test = X_test.reshape((-1, 1, 28, 28))
-#
-#     # The targets are int64, we cast them to int8 for GPU compatibility.
-#     y_train = y_train.astype(np.uint8)
-#     y_val = y_val.astype(np.uint8)
-#     y_test = y_test.astype(np.uint8)
-#
-#     # We just return all the arrays in order, as expected in main().
-#     # (It doesn't matter how we do this as long as we can read them again.)
-#     return X_train, y_train, X_val, y_val, X_test, y_test
 
 
 # ##################### Build the neural network model #######################
@@ -135,77 +87,6 @@ def build_mlp(input_var=None):
     return l_out
 
 
-def build_custom_mlp(input_var=None, depth=2, width=800, drop_input=.2,
-                     drop_hidden=.5):
-    # By default, this creates the same network as `build_mlp`, but it can be
-    # customized with respect to the number and size of hidden layers. This
-    # mostly showcases how creating a network in Python code can be a lot more
-    # flexible than a configuration file. Note that to make the code easier,
-    # all the layers are just called `layer` -- there is no need to give them
-    # different names if all we return is the last one we created anyway; we
-    # just used different names above for clarity.
-
-    # Input layer and dropout (with shortcut `dropout` for `DropoutLayer`):
-    layer = lasagne.layers.InputLayer(shape=(None, 1, 28, 28),
-                                      input_var=input_var)
-    if drop_input:
-        layer = lasagne.layers.dropout(layer, p=drop_input)
-    # Hidden layers and dropout:
-    nonlin = lasagne.nonlinearities.rectify
-    for _ in range(depth):
-        layer = lasagne.layers.DenseLayer(layer, width, nonlinearity=nonlin)
-        if drop_hidden:
-            layer = lasagne.layers.dropout(layer, p=drop_hidden)
-    # Output layer:
-    softmax = lasagne.nonlinearities.softmax
-    layer = lasagne.layers.DenseLayer(layer, 10, nonlinearity=softmax)
-    return layer
-
-
-def build_cnn(input_var=None):
-    # As a third model, we'll create a CNN of two convolution + pooling stages
-    # and a fully-connected hidden layer in front of the output layer.
-
-    # Input layer, as usual:
-    layer = lasagne.layers.InputLayer(shape=(None, 1, 28, 28),
-                                      input_var=input_var)
-    # This time we do not apply input dropout, as it tends to work less well
-    # for convolutional layers.
-
-    # Convolutional layer with 32 kernels of size 5x5. Strided and padded
-    # convolutions are supported as well; see the docstring.
-    layer = lasagne.layers.Conv2DLayer(
-            layer, num_filters=32, filter_size=(5, 5),
-            nonlinearity=lasagne.nonlinearities.rectify,
-            W=lasagne.init.GlorotUniform())
-    # Expert note: Lasagne provides alternative convolutional layers that
-    # override Theano's choice of which implementation to use; for details
-    # please see http://lasagne.readthedocs.org/en/latest/user/tutorial.html.
-
-    # Max-pooling layer of factor 2 in both dimensions:
-    layer = lasagne.layers.MaxPool2DLayer(layer, pool_size=(2, 2))
-
-    # Another convolution with 32 5x5 kernels, and another 2x2 pooling:
-    layer = lasagne.layers.Conv2DLayer(
-            layer, num_filters=32, filter_size=(5, 5),
-            nonlinearity=lasagne.nonlinearities.rectify)
-    layer = lasagne.layers.MaxPool2DLayer(layer, pool_size=(2, 2))
-
-    # A fully-connected layer of 256 units with 50% dropout on its inputs:
-    layer = lasagne.layers.DenseLayer(
-            lasagne.layers.dropout(layer, p=.5),
-            num_units=256,
-            nonlinearity=lasagne.nonlinearities.rectify)
-
-    # And, finally, the 10-unit output layer with 50% dropout on its inputs:
-    layer = lasagne.layers.DenseLayer(
-            lasagne.layers.dropout(layer, p=.5),
-            num_units=10,
-            nonlinearity=lasagne.nonlinearities.softmax)
-
-    return layer
-
-
 # ############################# Batch iterator ###############################
 # This is just a simple helper function iterating over training data in
 # mini-batches of a particular size, optionally in random order. It assumes
@@ -246,20 +127,15 @@ def main(model='mlp', num_epochs=500):
     print("Building model and compiling functions...")
     if model == 'mlp':
         network = build_mlp(input_var)
-    elif model.startswith('custom_mlp:'):
-        depth, width, drop_in, drop_hid = model.split(':', 1)[1].split(',')
-        network = build_custom_mlp(input_var, int(depth), int(width),
-                                   float(drop_in), float(drop_hid))
-    elif model == 'cnn':
-        network = build_cnn(input_var)
     else:
         print("Unrecognized model type %r." % model)
 
     # Create a loss expression for training, i.e., a scalar objective we want
     # to minimize (for our multi-class problem, it is the cross-entropy loss):
     prediction = lasagne.layers.get_output(network)
-    loss = lasagne.objectives.binary_crossentropy(prediction, target_var)
+    loss = lasagne.objectives.mse(prediction, target_var)
     loss = loss.mean()
+    print(loss)
     # We could add some weight decay as well here, see lasagne.regularization.
 
     # Create update expressions for training, i.e., how to modify the
@@ -273,7 +149,7 @@ def main(model='mlp', num_epochs=500):
     # here is that we do a deterministic forward pass through the network,
     # disabling dropout layers.
     test_prediction = lasagne.layers.get_output(network, deterministic=True)
-    test_loss = lasagne.objectives.categorical_crossentropy(test_prediction,
+    test_loss = lasagne.objectives.mse(test_prediction,
                                                             target_var)
     test_loss = test_loss.mean()
     # As a bonus, also create an expression for the classification accuracy:
@@ -297,7 +173,6 @@ def main(model='mlp', num_epochs=500):
         start_time = time.time()
         for batch in iterate_minibatches(X_train, y_train, 500, shuffle=True):
             inputs, targets = batch
-            print(inputs.shape, targets.shape)
             train_err += train_fn(inputs, targets)
             train_batches += 1
 
