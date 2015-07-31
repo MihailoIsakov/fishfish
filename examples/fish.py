@@ -21,6 +21,7 @@ import time
 import numpy as np
 import theano
 import theano.tensor as T
+import cv2
 
 import lasagne
 
@@ -28,6 +29,8 @@ import lasagne
 # ################## Download and prepare the MNIST dataset ##################
 # This is just some way of getting the MNIST dataset from an online location
 # and loading it into numpy arrays. It doesn't involve Lasagne at all.
+
+
 
 def load_dataset():
     # We first define some helper functions for supporting both Python 2 and 3.
