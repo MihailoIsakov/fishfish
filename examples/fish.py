@@ -25,60 +25,67 @@ import cv2
 
 import lasagne
 
+import image2inputs
+
 
 # ################## Download and prepare the MNIST dataset ##################
 # This is just some way of getting the MNIST dataset from an online location
 # and loading it into numpy arrays. It doesn't involve Lasagne at all.
 
 
-
 def load_dataset():
-    # We first define some helper functions for supporting both Python 2 and 3.
-    if sys.version_info[0] == 2:
-        from urllib import urlretrieve
-        import cPickle as pickle
+    nopuff, puff = image2inputs.load_images()
+    tri, tro, vi, vo, tei, teo =  image2inputs.build_set(nopuff, puff)
+    return tri, tro, vi, vo, tei, teo
 
-        def pickle_load(f, encoding):
-            return pickle.load(f)
-    else:
-        from urllib.request import urlretrieve
-        import pickle
 
-        def pickle_load(f, encoding):
-            return pickle.load(f, encoding=encoding)
-
-    # We'll now download the MNIST dataset if it is not yet available.
-    url = 'http://deeplearning.net/data/mnist/mnist.pkl.gz'
-    filename = 'mnist.pkl.gz'
-    if not os.path.exists(filename):
-        print("Downloading MNIST dataset...")
-        urlretrieve(url, filename)
-
-    # We'll then load and unpickle the file.
-    import gzip
-    with gzip.open(filename, 'rb') as f:
-        data = pickle_load(f, encoding='latin-1')
-
-    # The MNIST dataset we have here consists of six numpy arrays:
-    # Inputs and targets for the training set, validation set and test set.
-    X_train, y_train = data[0]
-    X_val, y_val = data[1]
-    X_test, y_test = data[2]
-
-    # The inputs come as vectors, we reshape them to monochrome 2D images,
-    # according to the shape convention: (examples, channels, rows, columns)
-    X_train = X_train.reshape((-1, 1, 28, 28))
-    X_val = X_val.reshape((-1, 1, 28, 28))
-    X_test = X_test.reshape((-1, 1, 28, 28))
-
-    # The targets are int64, we cast them to int8 for GPU compatibility.
-    y_train = y_train.astype(np.uint8)
-    y_val = y_val.astype(np.uint8)
-    y_test = y_test.astype(np.uint8)
-
-    # We just return all the arrays in order, as expected in main().
-    # (It doesn't matter how we do this as long as we can read them again.)
-    return X_train, y_train, X_val, y_val, X_test, y_test
+# def load_dataset():
+#     # We first define some helper functions for supporting both Python 2 and 3.
+#     if sys.version_info[0] == 2:
+#         from urllib import urlretrieve
+#         import cPickle as pickle
+#
+#         def pickle_load(f, encoding):
+#             return pickle.load(f)
+#     else:
+#         from urllib.request import urlretrieve
+#         import pickle
+#
+#         def pickle_load(f, encoding):
+#             return pickle.load(f, encoding=encoding)
+#
+#     # We'll now download the MNIST dataset if it is not yet available.
+#     url = 'http://deeplearning.net/data/mnist/mnist.pkl.gz'
+#     filename = 'mnist.pkl.gz'
+#     if not os.path.exists(filename):
+#         print("Downloading MNIST dataset...")
+#         urlretrieve(url, filename)
+#
+#     # We'll then load and unpickle the file.
+#     import gzip
+#     with gzip.open(filename, 'rb') as f:
+#         data = pickle_load(f, encoding='latin-1')
+#
+#     # The MNIST dataset we have here consists of six numpy arrays:
+#     # Inputs and targets for the training set, validation set and test set.
+#     X_train, y_train = data[0]
+#     X_val, y_val = data[1]
+#     X_test, y_test = data[2]
+#
+#     # The inputs come as vectors, we reshape them to monochrome 2D images,
+#     # according to the shape convention: (examples, channels, rows, columns)
+#     X_train = X_train.reshape((-1, 1, 28, 28))
+#     X_val = X_val.reshape((-1, 1, 28, 28))
+#     X_test = X_test.reshape((-1, 1, 28, 28))
+#
+#     # The targets are int64, we cast them to int8 for GPU compatibility.
+#     y_train = y_train.astype(np.uint8)
+#     y_val = y_val.astype(np.uint8)
+#     y_test = y_test.astype(np.uint8)
+#
+#     # We just return all the arrays in order, as expected in main().
+#     # (It doesn't matter how we do this as long as we can read them again.)
+#     return X_train, y_train, X_val, y_val, X_test, y_test
 
 
 # ##################### Build the neural network model #######################
@@ -94,7 +101,7 @@ def build_mlp(input_var=None):
     # Input layer, specifying the expected input shape of the network
     # (unspecified batchsize, 1 channel, 28 rows and 28 columns) and
     # linking it to the given Theano variable `input_var`, if any:
-    l_in = lasagne.layers.InputLayer(shape=(None, 1, 28, 28),
+    l_in = lasagne.layers.InputLayer(shape=(None, 3, 45, 30),
                                      input_var=input_var)
 
     # Apply 20% dropout to the input data:
@@ -120,8 +127,8 @@ def build_mlp(input_var=None):
 
     # Finally, we'll add the fully-connected output layer, of 10 softmax units:
     l_out = lasagne.layers.DenseLayer(
-            l_hid2_drop, num_units=10,
-            nonlinearity=lasagne.nonlinearities.softmax)
+            l_hid2_drop, num_units=1,
+            nonlinearity=lasagne.nonlinearities.sigmoid)
 
     # Each layer is linked to its incoming layer(s), so we only need to pass
     # the output layer to give access to a network in Lasagne:
@@ -251,7 +258,7 @@ def main(model='mlp', num_epochs=500):
     # Create a loss expression for training, i.e., a scalar objective we want
     # to minimize (for our multi-class problem, it is the cross-entropy loss):
     prediction = lasagne.layers.get_output(network)
-    loss = lasagne.objectives.categorical_crossentropy(prediction, target_var)
+    loss = lasagne.objectives.binary_crossentropy(prediction, target_var)
     loss = loss.mean()
     # We could add some weight decay as well here, see lasagne.regularization.
 
@@ -290,6 +297,7 @@ def main(model='mlp', num_epochs=500):
         start_time = time.time()
         for batch in iterate_minibatches(X_train, y_train, 500, shuffle=True):
             inputs, targets = batch
+            print(inputs.shape, targets.shape)
             train_err += train_fn(inputs, targets)
             train_batches += 1
 

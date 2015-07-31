@@ -1,5 +1,4 @@
-__author__ = 'zieghailo'
-
+from __future__ import division
 import os
 import cv2
 import numpy as np
@@ -17,6 +16,7 @@ def load_images():
     for file in puff_files:
         img = cv2.imread(uri + uri_puffs + file)
         img = np.swapaxes(img, 0, 2)
+        img = img / 255.0
         img = img[np.newaxis, ...]
         puff_images.append(img)
 
@@ -26,6 +26,7 @@ def load_images():
     for file in no_puff_files:
         img = cv2.imread(uri + uri_no_puffs + file)
         img = np.swapaxes(img, 0, 2)
+        img = img / 255.0
         img = img[np.newaxis, ...]
         no_puff_images.append(img)
 
@@ -49,13 +50,13 @@ def build_set(no_puff_images, puff_images):
     shuffled_input = inputs[indices]
     shuffled_output = outputs[indices]
 
-    train_inputs = shuffled_input[:length*3/5]
-    validate_inputs = shuffled_input[length*3/5 : length*4/5]
-    test_inputs = shuffled_input[length*4/5:]
+    train_inputs = shuffled_input[:length*3/5].astype(np.float32)
+    validate_inputs = shuffled_input[length*3/5 : length*4/5].astype(np.float32)
+    test_inputs = shuffled_input[length*4/5:].astype(np.float32)
 
-    train_outputs = shuffled_output[:length*3/5]
-    validate_outputs = shuffled_output[length*3/5 : length*4/5]
-    test_outputs = shuffled_output[length*4/5 :]
+    train_outputs = shuffled_output[:length*3/5].astype(np.int8)
+    validate_outputs = shuffled_output[length*3/5 : length*4/5].astype(np.int8)
+    test_outputs = shuffled_output[length*4/5 :].astype(np.int8)
 
     return train_inputs, train_outputs, validate_inputs, validate_outputs, test_inputs, test_outputs
 
